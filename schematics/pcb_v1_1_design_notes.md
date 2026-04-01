@@ -7,6 +7,7 @@ Wersja 1.1 ma rozwiazac trzy glowne problemy obecnej plytki:
 1. Ograniczenie slyszalnych zaklocen z linii 5.25 V Flippera w torze audio.
 2. Zastapienie PAM8403 ukladem PAM8406 https://www.diodes.com/assets/Datasheets/PAM8406.pdf https://www.diodes.com/assets/Evaluation-Boards/PAM8406-User-Guide.pdf, ktory jest aktywnym produktem i daje dodatkowo wybor trybu Class D / Class AB.
 3. Dodanie sprzetowych linii sterujacych wzmacniaczem, aby aplikacja FM mogla sterowac nie tylko PT, ale tez sama koncowka mocy.
+4. Dodanie osobnych LDO 3.3 V dla sekcji PT i TEA, aby odseparowac je od zaklocen generowanych przez koncowke mocy i zasilanie 5.25 V Flippera.
 
 ## Architektura zasilania v1.1
 
@@ -125,8 +126,14 @@ Uwaga:
 Ponizsze wnioski sa wyciagniete z fragmentu dokumentacji TI dostarczonego do projektu i odnosza sie do uzycia LDO w naszej architekturze zasilania.
 
 Lokalna referencja obrazkowa layoutu:
-- [schematics/pdfimages/PAM8406-User-Guide/tps7a20_pcb_layout.png](schematics/pdfimages/PAM8406-User-Guide/tps7a20_pcb_layout.png)
-- [schematics/pdfimages/PAM8406-User-Guide/tps7a20_schematic.png](schematics/pdfimages/PAM8406-User-Guide/tps7a20_schematic.png)
+- [pdfimages/PAM8406-User-Guide/tps7a20_pcb_layout.png](pdfimages/PAM8406-User-Guide/tps7a20_pcb_layout.png)
+- [pdfimages/PAM8406-User-Guide/tps7a20_schematic.png](pdfimages/PAM8406-User-Guide/tps7a20_schematic.png)
+
+Podglad inline w GitHub Markdown:
+
+![TPS7A20 PCB layout](pdfimages/PAM8406-User-Guide/tps7a20_pcb_layout.png)
+
+![TPS7A20 schematic](pdfimages/PAM8406-User-Guide/tps7a20_schematic.png)
 
 Referencja PDF producenta:
 - https://www.ti.com/lit/ds/symlink/tps7a20.pdf
@@ -325,10 +332,18 @@ Powody:
 ## Wnioski z EVB User Guide Diodes
 
 Zrodla lokalne w repo:
-- [schematics/pdf/PAM8406-User-Guide.pdf](schematics/pdf/PAM8406-User-Guide.pdf)
-- [schematics/pdfimages/PAM8406-User-Guide/board_schematic.png](schematics/pdfimages/PAM8406-User-Guide/board_schematic.png)
-- [schematics/pdfimages/PAM8406-User-Guide/page-005.png](schematics/pdfimages/PAM8406-User-Guide/page-005.png)
-- [schematics/pdfimages/PAM8406-User-Guide/page-007.png](schematics/pdfimages/PAM8406-User-Guide/page-007.png)
+- [pdf/PAM8406-User-Guide.pdf](pdf/PAM8406-User-Guide.pdf)
+- [pdfimages/PAM8406-User-Guide/board_schematic.png](pdfimages/PAM8406-User-Guide/board_schematic.png)
+- [pdfimages/PAM8406-User-Guide/page-005.png](pdfimages/PAM8406-User-Guide/page-005.png)
+- [pdfimages/PAM8406-User-Guide/page-007.png](pdfimages/PAM8406-User-Guide/page-007.png)
+
+Podglad inline w GitHub Markdown:
+
+![PAM8406 EVB board schematic](pdfimages/PAM8406-User-Guide/board_schematic.png)
+
+![PAM8406 EVB page 005](pdfimages/PAM8406-User-Guide/page-005.png)
+
+![PAM8406 EVB page 007](pdfimages/PAM8406-User-Guide/page-007.png)
 
 Najwazniejsze obserwacje z EVB:
 1. Producent stosuje osobne odsprzeganie dla VDD i dla PVDD.
