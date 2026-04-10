@@ -110,6 +110,11 @@ void rds_dsp_init(RDSDsp* dsp, uint32_t sample_rate_hz) {
     dsp->avg_vector_mag_q8 = 0U;
     dsp->avg_decision_mag_q8 = 0U;
     dsp->cached_symbol_period_q16 = 0U;
+#ifdef HOST_BUILD
+    dsp->bit_log = NULL;
+    dsp->bit_log_count = 0;
+    dsp->bit_log_capacity = 0;
+#endif
 
     if(sample_rate_hz == 0U) {
         dsp->samples_per_symbol_q16 = 0U;
@@ -241,7 +246,7 @@ void rds_dsp_process_u16_samples(
         }
 
         // Three-stage cascade IIR LPF (alpha=1/8 each).
-        // Effective -3dB at ~2.5 kHz, 18 dB/octave rolloff.
+        // Effective -3dB at ~2.5 kHz @ 228kHz, 18 dB/octave rolloff.
         // Rejects stereo L-R subcarrier leaking at 4+ kHz baseband.
         // Stage 1
         dsp->i_lpf_state += (mixed_i - dsp->i_lpf_state) >> 3;
@@ -290,12 +295,22 @@ void rds_dsp_process_u16_samples(
                 ((int64_t)dsp->i_integrator * (int64_t)dsp->prev_i_symbol) +
                 ((int64_t)dsp->q_integrator * (int64_t)dsp->prev_q_symbol);
             uint8_t bit = (dot < 0) ? 1U : 0U;
-            uint32_t decision_mag = (uint32_t)((dot < 0) ? -dot : dot) >> 16U;
+            uint64_t abs_dot = (uint64_t)((dot < 0) ? -dot : dot);
+            uint32_t decision_mag = (uint32_t)(abs_dot >> 16U);
+            if((abs_dot >> 16U) > 0xFFFFFFFFULL) {
+                decision_mag = 0xFFFFFFFFU;
+            }
 
             uint32_t denominator = vector_mag + 1U;
             uint32_t confidence_q16 =
                 (uint32_t)(((uint64_t)decision_mag << 16U) / (uint64_t)denominator);
             if(confidence_q16 > 65535U) confidence_q16 = 65535U;
+
+#ifdef HOST_BUILD
+            if(dsp->bit_log && dsp->bit_log_count < dsp->bit_log_capacity) {
+                dsp->bit_log[dsp->bit_log_count++] = bit;
+            }
+#endif
 
             dsp->avg_decision_mag_q8 =
                 rds_ema_u32(dsp->avg_decision_mag_q8, decision_mag, 8U);
@@ -303,6 +318,10 @@ void rds_dsp_process_u16_samples(
                 rds_ema_u32(dsp->symbol_confidence_avg_q16, confidence_q16, 7U);
             block_confidence_sum_q16 += confidence_q16;
             block_symbol_count++;
+
+            core->pilot_level_q8 = dsp->pilot_level_q8;
+            core->rds_band_level_q8 = dsp->rds_band_level_q8;
+            core->lock_quality_q16 = dsp->symbol_confidence_avg_q16;
 
             (void)rds_core_consume_demod_bit(core, bit, NULL);
 
@@ -320,15 +339,23 @@ void rds_dsp_process_u16_samples(
                 timing_error = (int32_t)timing_error64;
             }
 
-            int32_t timing_step = timing_error >> 10;
-            timing_step = rds_clamp_i32(timing_step, -1024, 1024);
+            /* Proportional-only timing recovery loop:
+             * Uses early-late energy difference for immediate phase correction.
+             * No integral (frequency) path — the 3-stage IIR LPF group delay
+             * creates a constant late-energy bias that an integral path
+             * accumulates into fatal frequency drift.
+             * If runtime shows sync losses from real frequency offset,
+             * add frequency tracking with bias compensation. */
+            int32_t phase_step = timing_error >> 10;
+            phase_step = rds_clamp_i32(phase_step, -1024, 1024);
+
             if(rds_abs_i32(timing_error) < (dsp->avg_vector_mag_q8 >> 4U)) {
-                timing_step = 0;
+                phase_step = 0;
             }
-            dsp->timing_adjust_q16 = rds_clamp_i32(
-                dsp->timing_adjust_q16 + timing_step,
-                -dsp->timing_adjust_limit_q16,
-                dsp->timing_adjust_limit_q16);
+
+            /* Proportional: shift current symbol boundary (non-cumulative) */
+            dsp->symbol_phase_q16 += (uint32_t)phase_step;
+
             dsp->timing_error_avg_q8 += (timing_error - dsp->timing_error_avg_q8) >> 6;
             dsp->cached_symbol_period_q16 = rds_symbol_period_q16(dsp);
 

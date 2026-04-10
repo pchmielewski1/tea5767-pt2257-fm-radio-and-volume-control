@@ -68,8 +68,12 @@ Wzmacniacz nieodwracajacy MCP6001 (SOT-23-5) zasilany z 3.3V_TEA:
 Kluczowe parametry obwodu:
 - HPF: fc = 1 / (2*pi*C2*R1) = 33 kHz → odcina audio i pilota, przepuszcza 57 kHz z -1.3 dB
 - Wzmocnienie: Av = 1 + Rf/Rg = 1 + 10k/2k = **x6**
-- DC na wyjsciu: Vbias = 3.3V / 2 = **1.65 V** (srodek zakresu ADC)
+- DC na wyjsciu: Vbias = 3.3V / 2 = **1.65 V** (srodek zakresu ADC, potwierdzone midpoint 2048/4095)
 - Worst case output (800 mV MPX): 2.44 V p-p wokol 1.65 V → od 0.43 V do 2.87 V → **nie clipuje**
+
+### Schemat obwodu MCP6001
+
+![MCP6001 RDS front-end schematic](image/mcp6001_schematic.png)
 
 ### Weryfikacja MCP6001
 
@@ -122,10 +126,13 @@ Timer:
 - Update trigger → ADC TRGO
 
 ADC:
-- Scale: FuriHalAdcScale2048 (10-bit, zakres 0-2048)
+- Rozdzielczosc: 12-bit (0-4095), hardcoded LL_ADC_RESOLUTION_12B
+- FuriHalAdcScale2048: ustawia wewnetrzny VREFBUF na 2.048 V (do kalibracji),
+  ale VREF+ ADC = VDDA = 3.3 V (full scale ADC = 3.3 V, 1 LSB = 0.806 mV)
 - Sampling time: 12.5 cykli
 - Trigger: TIM1 TRGO
 - DMA: REG_DMA_TRANSFER_UNLIMITED (circular)
+- Midpoint: RDS_ADC_FIXED_MIDPOINT = 2072 (empiryczny, dc_estimate_q8 EMA koryguje reszte)
 
 DMA:
 - DMA1 Channel 1
@@ -479,7 +486,8 @@ app_version=
 utc_or_tick=
 station_freq_10khz=
 sample_rate_hz=228000
-adc_bits=10
+adc_bits=12
+adc_fullscale_v=3.3
 adc_storage=u16le
 adc_pin=PA4
 adc_channel=ADC1_IN9
@@ -492,7 +500,7 @@ block_samples=1024
 
 ### mpx_adc_u16le.raw
 - surowe probki ADC, little-endian uint16_t
-- wartosc 0 do 2048 (10-bit ADC)
+- wartosc 0 do 4095 (12-bit ADC, full scale = VDDA = 3.3 V, 1 LSB = 0.806 mV)
 - tylko tryb diagnostyczny, ograniczony czas (kilka sekund)
 
 ### rds_events.csv

@@ -54,6 +54,11 @@ typedef struct {
     uint32_t avg_vector_mag_q8;
     uint32_t avg_decision_mag_q8;
     uint32_t cached_symbol_period_q16;
+#ifdef HOST_BUILD
+    uint8_t* bit_log;
+    size_t bit_log_count;
+    size_t bit_log_capacity;
+#endif
 } RDSDsp;
 
 void rds_dsp_init(RDSDsp* dsp, uint32_t sample_rate_hz);

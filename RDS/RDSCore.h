@@ -12,7 +12,7 @@
 #define RDS_RT_LEN 64U
 #define RDS_EVENT_QUEUE_SIZE 8U
 #define RDS_PILOT_LEVEL_MIN_Q8 5120U
-#define RDS_BAND_LEVEL_MIN_Q8 5120U
+#define RDS_BAND_LEVEL_MIN_Q8 1024U
 #define RDS_PRESYNC_REQUIRED 3U
 
 #define RDS_OFFSET_A 0x0FCU
@@ -139,6 +139,30 @@ typedef struct {
     uint32_t uncorrectable_blocks;
     uint32_t sync_losses;
     uint32_t bit_slip_repairs;
+
+    /* Diagnostic counters */
+    uint32_t groups_complete;
+    uint32_t groups_type0;
+    uint32_t groups_type2;
+    uint32_t groups_other;
+    uint32_t pi_updates;
+    uint32_t ps_updates;
+    uint32_t presync_attempts;
+    uint32_t presync_max_consecutive;
+    uint32_t quality_gate_pilot_fail;
+    uint32_t quality_gate_rds_fail;
+    uint32_t events_emitted;
+    uint32_t events_dropped;
+    uint16_t last_pi;
+
+    /* Mode-separated block counters for diagnostics */
+    uint32_t search_valid;
+    uint32_t search_corrected;
+    uint32_t search_uncorrectable;
+    uint32_t sync_valid;
+    uint32_t sync_corrected;
+    uint32_t sync_uncorrectable;
+    uint32_t sync_bits_total;
 
     RdsGroup current_group;
     RdsProgramInfo program;
