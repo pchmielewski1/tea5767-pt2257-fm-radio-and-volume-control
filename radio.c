@@ -851,6 +851,7 @@ static const char* fmradio_rds_sync_short_text(RdsSyncState state) {
 static void fmradio_rds_on_tuned_frequency_changed(void) {
     fmradio_rds_clear_station_name();
     if(rds_enabled) {
+        rds_core_set_tick_ms(&rds_core, furi_get_tick());
         rds_core_restart_sync(&rds_core);
         rds_dsp_reset(&rds_dsp);
         fmradio_rds_update_ui_snapshot();
@@ -861,6 +862,8 @@ static void fmradio_rds_on_tuned_frequency_changed(void) {
 
 static void fmradio_rds_process_events(void) {
     RdsEvent event;
+
+    rds_core_set_tick_ms(&rds_core, furi_get_tick());
 
     while(rds_core_pop_event(&rds_core, &event)) {
         if(event.type == RdsEventTypePsUpdated) {
@@ -893,6 +896,7 @@ void fmradio_rds_process_adc_block(const uint16_t* samples, size_t count, uint16
 
     if(!rds_enabled) return;
 
+    rds_core_set_tick_ms(&rds_core, furi_get_tick());
     rds_dsp_process_u16_samples(&rds_dsp, &rds_core, samples, count, adc_midpoint);
     ui_snapshot_div++;
     if(ui_snapshot_div >= 4U) {
@@ -948,6 +952,7 @@ static void fmradio_controller_rds_change(VariableItem* item) {
 
     fmradio_rds_clear_station_name();
     if(rds_enabled) {
+        rds_core_set_tick_ms(&rds_core, furi_get_tick());
         rds_core_reset(&rds_core);
         rds_dsp_reset(&rds_dsp);
         fmradio_rds_metadata_reset();
@@ -1736,6 +1741,7 @@ FMRadio* fmradio_controller_alloc() {
     fmradio_settings_load();
 
 #ifdef ENABLE_RDS
+    rds_core_set_tick_ms(&rds_core, furi_get_tick());
     rds_core_reset(&rds_core);
     rds_dsp_init(&rds_dsp, RDS_ACQ_TARGET_SAMPLE_RATE_HZ);
     rds_acquisition_init(

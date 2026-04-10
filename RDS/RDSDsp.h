@@ -8,9 +8,6 @@
 
 typedef struct {
     uint32_t sample_rate_hz;
-    bool use_fast_path_228k;
-    uint8_t sample_mod4;
-    uint8_t sample_mod12;
     uint8_t decim_factor;
     uint8_t decim_phase;
     uint32_t decim_step_q16;

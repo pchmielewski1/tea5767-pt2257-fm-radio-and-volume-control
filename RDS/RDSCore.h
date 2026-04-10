@@ -12,7 +12,7 @@
 #define RDS_RT_LEN 64U
 #define RDS_EVENT_QUEUE_SIZE 8U
 #define RDS_PILOT_LEVEL_MIN_Q8 5120U
-#define RDS_BAND_LEVEL_MIN_Q8 1024U
+#define RDS_BAND_LEVEL_MIN_Q8 5120U
 #define RDS_PRESYNC_REQUIRED 3U
 
 #define RDS_OFFSET_A 0x0FCU
@@ -170,6 +170,7 @@ typedef struct {
     bool slip_retry_pending;
     bool pilot_detected;
     bool rds_carrier_detected;
+    uint32_t event_tick_ms;
     RdsEvent event_queue[RDS_EVENT_QUEUE_SIZE];
     uint8_t event_read_idx;
     uint8_t event_write_idx;
@@ -178,6 +179,7 @@ typedef struct {
 
 void rds_core_reset(RDSCore* core);
 void rds_core_restart_sync(RDSCore* core);
+void rds_core_set_tick_ms(RDSCore* core, uint32_t tick_ms);
 void rds_core_push_bit(RDSCore* core, uint8_t bit);
 bool rds_core_consume_demod_bit(RDSCore* core, uint8_t bit, RdsBlock* decoded_block);
 bool rds_core_try_decode_block(RDSCore* core, RdsBlock* block, uint32_t raw26);

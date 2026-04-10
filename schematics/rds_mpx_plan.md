@@ -33,8 +33,9 @@ Status walidacji:
 Najwazniejsze wnioski juz teraz:
 - realny tor runtime pokazuje, ze `ADC + DMA + timer` sa stabilne,
 - glowny problem to jakosc sygnalu MPX/RDS, nie wydajnosc cyfrowa,
-- syntetyczny prog poprawnego dekodowania przy realnym sample rate `227758 Hz`
-  wypada bardzo blisko przewidywanego zysku `MCP6001`.
+- testy syntetyczne pokazuja, ze poprzedni cel analogowy `~41 LSB` jest zbyt blisko progu,
+   wiec dla PCB v1.1 nominalny gain `MCP6001` powinien byc podniesiony tak,
+   zeby z dostepnych wartosci PCBA trafic mozliwie blisko obszaru `45..46 LSB`.
 
 ---
 
@@ -121,15 +122,17 @@ Wzmacniacz nieodwracajacy `MCP6001` (SOT-23-5), zasilany z `3.3V_TEA`:
 | `Rb1` | `100 kOhm` | bias divider do `Vbias` |
 | `Rb2` | `100 kOhm` | bias divider do `GND` |
 | `Cb` | `100 nF` | AC ground dla `Vbias` |
-| `Rf` | `10 kOhm` | feedback |
+| `Rf` | `12 kOhm` | feedback |
 | `Rg` | `2 kOhm` | ustawienie gain |
 | `C4` | `100 nF` | bypass VDD |
 
 Kluczowe parametry obwodu:
 - `HPF fc ~= 33 kHz`
-- `Av = 1 + Rf/Rg = 6x`
+- `Av = 1 + Rf/Rg = 7.0x`
 - `Vbias = 1.65 V`
-- spodziewany sygnal RDS po wzmacniaczu: okolo `41 LSB` na ADC (teoria)
+- spodziewany sygnal RDS po wzmacniaczu: okolo `47 LSB` na ADC (`~37.9 mV peak`)
+- praktyczny cel projektowy dla PCB v1.1 pozostaje `45..46 LSB`,
+  ale z dostepnego kompletu rezystorow najblizszy sensowny populate daje lekko wyzsze `~47 LSB`
 
 ### Schemat obwodu MCP6001
 
@@ -141,7 +144,7 @@ Potwierdzone z datasheetu i notatek projektowych:
 - `GBW = 1 MHz`
 - `Slew rate = 0.6 V/us`
 - `rail-to-rail I/O`
-- stabilna praca przy `G=+6`
+- `MCP6001` jest unity-gain stable, wiec `G ~= +7` nadal pozostaje bezpieczne
 - wejscie ADC Flippera nie przekracza problematycznego obciazenia pojemnosciowego
 
 ---
@@ -194,10 +197,8 @@ Rzeczywiste zachowanie:
 - realny sample rate to `227758 Hz`, nie idealne `228000 Hz`.
 
 To jest bardzo wazne, bo:
-- aktualny firmware na Flipperze **nie** wpada w `fast path 228k`,
-- na prawdziwym sprzecie dziala sciezka ogolna `NCO`,
-- `fast path` istnieje, ale wlacza sie tylko przy **dokladnie** `228000 Hz`
-  (to rozjazd wzgledem starszego planu).
+- kod DSP nie ma juz sciezki `fast path 228k` (zostala usunieta),
+- na sprzecie i w testach dziala jedyna sciezka: `NCO`.
 
 ### Timer / ADC / DMA
 
@@ -261,7 +262,7 @@ To znaczy:
 | Blok koncepcyjny | Nasza implementacja |
 |---|---|
 | Wydzielenie RDS z MPX | `MCP6001 HPF + cyfrowy I/Q mixer + 3-stopniowy IIR LPF` |
-| Regeneracja nosnej | `NCO 57 kHz` (`na realnym Flipperze`, nie fast-path) |
+| Regeneracja nosnej | `NCO 57 kHz` (jedyna sciezka, fast-path usuniety) |
 | Demodulacja | `I/Q + DBPSK differential detect` |
 | Integracja symboli | `I/Q integrator po jednej decyzji na symbol` |
 | Detekcja blokow | `SEARCH sliding bit-by-bit`, `SYNC co 26 bitow` |
@@ -273,8 +274,9 @@ To znaczy:
 
 Najwazniejsze rozjazdy:
 - `(inaczej niz stary plan)` korekcja burst jest juz tylko `1..2`, nie `1..5`,
-- `(inaczej niz SAA6588 i stary plan)` w `SEARCH` nie ma korekcji, jest tylko exact match,
-- `(inaczej niz stary plan)` realny hardware nie korzysta z fast-path `228k`, tylko z `NCO` przy `227758 Hz`,
+- `(inaczej niz SAA6588 i stary plan)` wejscie z `SEARCH` do `PRE_SYNC` wymaga `Valid`/exact match;
+   kandydaty `Corrected` w `SEARCH` sa nadal widoczne diagnostycznie, ale nie podnosza sync,
+- `(historia)` fast-path `228k` zostal **usuniety z kodu**; jedyna sciezka to `NCO` przy `227758 Hz`,
 - `(inaczej niz SAA6588)` jakosc i synchronizacja sa pilnowane przez jawna state machine,
   a nie przez dedykowany analog/cyfrowy blok jednoukladowy.
 
@@ -322,19 +324,15 @@ ale sluzy do quality gate.
 
 #### 3. Mieszanie 57 kHz do bazy
 
-Sa dwie sciezki:
+Kod uzywa `NCO` (numerycznie sterowanego oscylatora):
+- `carrier_phase_q32`
+- `carrier_step_q32`
+- lookup cos/sin.
 
-- `fast path` dla dokladnie `228000 Hz`
-  - `sample_mod4`, bez NCO,
-  - tylko host/test lub idealny przypadek.
-
-- `generic path` dla wszystkiego innego
-  - `carrier_phase_q32`
-  - `carrier_step_q32`
-  - lookup cos/sin.
-
-Na prawdziwym Flipperze dziala **generic path**,
-bo `configured_sample_rate_hz = 227758`.
+Historicznie istnial tez `fast path` dla dokladnie `228000 Hz`
+(bez NCO, z `sample_mod4`), ale zostal usuniety z kodu,
+bo na prawdziwym Flipperze i tak nigdy nie byl aktywny
+(`configured_sample_rate_hz = 227758`).
 
 #### 4. LPF
 
@@ -395,7 +393,6 @@ Co to znaczy:
 
 Pola aktywnie aktualizowane przez kod:
 - `sample_rate_hz`
-- `use_fast_path_228k`
 - `samples_per_symbol_q16`
 - `symbol_phase_q16`
 - `timing_adjust_q16`
@@ -473,8 +470,9 @@ Najprosciej:
 
 3. **W `SEARCH` przesuwa okno bit po bicie**
    - po kazdym nowym bicie probuje odczytac cale 26-bit slowo,
-   - akceptuje tylko exact syndrome match bez korekcji
-     (`inaczej niz stary plan i inaczej niz klasyczne "probuj wszystko z correction"`).
+    - do wejscia w `PRE_SYNC` akceptuje tylko `Valid` / exact match,
+    - kandydaty `Corrected` w `SEARCH` moga jeszcze pojawic sie diagnostycznie,
+       ale nie sa uzywane do lapania synchronizacji.
 
 4. **Gdy trafi pierwszy sensowny blok, wchodzi do `PRE_SYNC`**
    - nie zaklada jeszcze, ze stream jest poprawnie wyrownany,
@@ -513,16 +511,17 @@ Co robi:
 - sprawdza wszystkie typy `A/B/C/C'/D`.
 
 Akceptacja:
-- tylko `Valid`, bez korekcji,
+- do wejscia w `PRE_SYNC`: tylko `Valid` / exact match,
+- `Corrected` w `SEARCH` pozostaja tylko diagnostyczne (`search_corrected`),
 - jesli pasuje wiele typow naraz -> blok odrzucony jako ambiguous.
 
 Dlaczego:
 - z korekcja false positive na szumie bylo zbyt duze,
 - exact-match daje o wiele mniejszy smietnik w licznikach.
 
-`SEARCH` w kodzie jest bardziej konserwatywny niz stary plan:
-- `(stary plan)` correction w SEARCH,
-- `(kod aktualny)` brak correction w SEARCH.
+Wejscie z `SEARCH` do `PRE_SYNC` w kodzie jest bardziej konserwatywne niz stary plan:
+- `(stary plan)` correction w SEARCH moglaby lapac sync,
+- `(kod aktualny)` sync podnosza tylko bloki `Valid`; `Corrected` w `SEARCH` zostaja w licznikach diagnostycznych.
 
 #### PRE_SYNC
 
@@ -570,10 +569,10 @@ Co robi:
 |---|---|---|
 | `RDS_PRESYNC_REQUIRED` | `3` | `(inaczej niz SAA6588=2)` |
 | `RDS_DEFAULT_FLYWHEEL_LIMIT` | `20` | bardziej tolerancyjne na chwilowe zaklocenia |
-| SEARCH acceptance | `Valid only` | `(inaczej niz stary plan z correction)` |
+| SEARCH -> PRE_SYNC acceptance | `Valid only` | `Corrected` w `SEARCH` pozostaja tylko diagnostyczne |
 | Correction burst | `1..2` | `(inaczej niz stary plan 1..5)` |
 | Quality gate pilot | `5120 Q8` = `20.0` | aktywny prog |
-| Quality gate rds | `1024 Q8` = `4.0` | `(inaczej niz stary plan, ktory sugerowal 20.0)` |
+| Quality gate rds | `5120 Q8` = `20.0` | zgodne ze starym planem |
 | Pilot ratio gate | `2*pilot > 3*rds` | pilot musi byc > `1.5x` pasma RDS |
 
 ### Sekwencja blokow i offset words
@@ -609,8 +608,8 @@ Tablice:
 Korekcja jest syndrome-based.
 
 Faktyczny stan kodu:
-- budowana jest tablica `120` wpisow,
-- ale tylko dla burst length `1..2`,
+- bufor correction table ma pojemnosc `120` wpisow,
+- przy burst length `1..2` faktycznie buduje sie `51` wpisow,
 - najlepszy wpis na syndrome wybierany jest po:
   1. najkrotszym burst,
   2. najwczesniejszej pozycji.
@@ -661,8 +660,7 @@ Parsowane pola:
 
 Wersje:
 - `2A`: `64` znaki, `16` segmentow po `4` znaki,
-- `2B`: `32` znaki, **dalej `16` segmentow**, ale po `2` znaki
-  (`to rozjazd wzgledem starego planu, gdzie bylo wpisane 8 segmentow`).
+- `2B`: `16` znakow, `8` segmentow po `2` znaki.
 
 Logika:
 - zmiana `A/B flag` zeruje bufor,
@@ -704,7 +702,7 @@ Dokladniej:
 | `PsUpdated` | emitowany | inkrementalnie po segmencie |
 | `RtUpdated` | emitowany | po skompletowaniu calego RT |
 | `PtyUpdated` | emitowany | group `0/2` |
-| `BlockStatsUpdated` | zdefiniowany, ale **nie emitowany** | martwa pozycja enum |
+| `BlockStatsUpdated` | emitowany co `32` bloki | lub przy sync acquire/loss |
 
 ### Struktura eventu
 
@@ -719,9 +717,8 @@ Event niesie:
 - `total/valid/corrected/uncorrectable blocks`
 
 Wazny detal:
-- pole `tick_ms` istnieje w strukturze,
-- ale aktualny kod **nigdzie go nie wypelnia**,
-- wiec w praktyce zostaje `0`.
+- pole `tick_ms` jest wypelniane przez `rds_core_set_tick_ms()`,
+- `radio.c` wywoluje to z `furi_get_tick()` przed kazdym przetwarzaniem bloku.
 
 ---
 
@@ -983,7 +980,613 @@ Interpretacja praktyczna:
 
 ---
 
-## Testy syntetyczne czulosci ADC
+## Metodologia powtarzalnych testow syntetycznych
+
+### Cel metodologii
+
+Ta sekcja definiuje **staly kontrakt** dla hostowych testow syntetycznych,
+ktore beda powtarzane po kolejnych wiekszych zmianach.
+
+Cel metodologii jest trojaki:
+- miec stale, porownywalne rodziny testow,
+- miec stale nazwy CSV/PNG i stale pytania testowe,
+- oddzielic szybki baseline regression od szerszej kampanii odpornosci i testow znakowych.
+
+Zakres tej metodologii:
+- dotyczy narzedzi hostowych w `tools/`,
+- nie zaklada napraw runtime `RDS/*` ani `radio.c`,
+- zaklada rerun **per-family**, nie jeden wielki `run-all`.
+
+### Kontrakt artefaktow i rerunow
+
+- kazda rodzina ma numer `01..15` i staly identyfikator `family_id`,
+- CSV: `tools/validation_csv/rds_XX_<family_id>.csv`,
+- PNG: `image/rds_XX_<family_id>.png`,
+- pliki tymczasowe RAW: `tools/tmp/rds_XX_<family_id>_*.raw`,
+- rerun jednej rodziny nadpisuje tylko jej kanoniczne artefakty,
+- szybki baseline po wiekszych zmianach zaczyna sie od `01` i `02`,
+- pelna kampania oznacza kolejne reruny `01..15`, ale nadal jako osobne wywolania.
+
+Wspolny baseline generatora, o ile dana rodzina nie nadpisuje konkretnego parametru:
+- `sample_rate_hz = 227758`
+- `adc_midpoint = 2048`
+- `pilot_amplitude = 200 LSB`
+- `PS = TESTFM`
+- `PI = 0xCAFE`
+- `repeat_count = 12`
+- `pulse_duty_pct = 100`
+- `noise_lsb = 0`
+
+### Mapa rodzin i artefaktow
+
+- `01 / adc_sensitivity_sweep`:
+   - [rds_01_adc_sensitivity_sweep.csv](../tools/validation_csv/rds_01_adc_sensitivity_sweep.csv)
+   - [rds_01_adc_sensitivity_sweep.png](../image/rds_01_adc_sensitivity_sweep.png)
+- `02 / adc_noise_margin`:
+   - [rds_02_adc_noise_margin.csv](../tools/validation_csv/rds_02_adc_noise_margin.csv)
+   - [rds_02_adc_noise_margin.png](../image/rds_02_adc_noise_margin.png)
+- `03 / phase_prefix_sweep`:
+   - [rds_03_phase_prefix_sweep.csv](../tools/validation_csv/rds_03_phase_prefix_sweep.csv)
+   - [rds_03_phase_prefix_sweep.png](../image/rds_03_phase_prefix_sweep.png)
+- `04 / sample_rate_mismatch_heatmap`:
+   - [rds_04_sample_rate_mismatch_heatmap.csv](../tools/validation_csv/rds_04_sample_rate_mismatch_heatmap.csv)
+   - [rds_04_sample_rate_mismatch_heatmap.png](../image/rds_04_sample_rate_mismatch_heatmap.png)
+- `05 / carrier_pilot_offset_sweep`:
+   - [rds_05_carrier_pilot_offset_sweep.csv](../tools/validation_csv/rds_05_carrier_pilot_offset_sweep.csv)
+   - [rds_05_carrier_pilot_offset_sweep.png](../image/rds_05_carrier_pilot_offset_sweep.png)
+- `06 / pilot_to_rds_ratio_sweep`:
+   - [rds_06_pilot_to_rds_ratio_sweep.csv](../tools/validation_csv/rds_06_pilot_to_rds_ratio_sweep.csv)
+   - [rds_06_pilot_to_rds_ratio_sweep.png](../image/rds_06_pilot_to_rds_ratio_sweep.png)
+- `07 / midpoint_offset_sweep`:
+   - [rds_07_midpoint_offset_sweep.csv](../tools/validation_csv/rds_07_midpoint_offset_sweep.csv)
+   - [rds_07_midpoint_offset_sweep.png](../image/rds_07_midpoint_offset_sweep.png)
+- `08 / clipping_saturation_sweep`:
+   - [rds_08_clipping_saturation_sweep.csv](../tools/validation_csv/rds_08_clipping_saturation_sweep.csv)
+   - [rds_08_clipping_saturation_sweep.png](../image/rds_08_clipping_saturation_sweep.png)
+- `09 / burst_error_map`:
+   - [rds_09_burst_error_map.csv](../tools/validation_csv/rds_09_burst_error_map.csv)
+   - [rds_09_burst_error_map.png](../image/rds_09_burst_error_map.png)
+- `10 / impulsive_noise_dropout`:
+   - [rds_10_impulsive_noise_dropout.csv](../tools/validation_csv/rds_10_impulsive_noise_dropout.csv)
+   - [rds_10_impulsive_noise_dropout.png](../image/rds_10_impulsive_noise_dropout.png)
+- `11 / mixed_group_robustness`:
+   - [rds_11_mixed_group_robustness.csv](../tools/validation_csv/rds_11_mixed_group_robustness.csv)
+   - [rds_11_mixed_group_robustness.png](../image/rds_11_mixed_group_robustness.png)
+- `12 / ps_rt_convergence`:
+   - [rds_12_ps_rt_convergence.csv](../tools/validation_csv/rds_12_ps_rt_convergence.csv)
+   - [rds_12_ps_rt_convergence.png](../image/rds_12_ps_rt_convergence.png)
+- `13 / charset_ascii_punctuation`:
+   - [rds_13_charset_ascii_punctuation.csv](../tools/validation_csv/rds_13_charset_ascii_punctuation.csv)
+   - [rds_13_charset_ascii_punctuation.png](../image/rds_13_charset_ascii_punctuation.png)
+- `14 / charset_extended_bytes`:
+   - [rds_14_charset_extended_bytes.csv](../tools/validation_csv/rds_14_charset_extended_bytes.csv)
+   - [rds_14_charset_extended_bytes.png](../image/rds_14_charset_extended_bytes.png)
+- `15 / rt_endmarker_ab_reset`:
+   - [rds_15_rt_endmarker_ab_reset.csv](../tools/validation_csv/rds_15_rt_endmarker_ab_reset.csv)
+   - [rds_15_rt_endmarker_ab_reset.png](../image/rds_15_rt_endmarker_ab_reset.png)
+
+### 01. Czulosc ADC (`adc_sensitivity_sweep`)
+
+Cel testu:
+- ustalic prog poprawnego dekodowania `PS` przy sweepie amplitudy.
+
+Bodziec / osie:
+- sweep `amplitude_lsb`, reszta parametrow na baseline.
+
+Artefakty:
+- [rds_01_adc_sensitivity_sweep.csv](../tools/validation_csv/rds_01_adc_sensitivity_sweep.csv)
+- [rds_01_adc_sensitivity_sweep.png](../image/rds_01_adc_sensitivity_sweep.png)
+
+Kryterium PASS:
+- `sync_state = SYNC` i poprawny `PS`.
+
+Biezacy wynik:
+- do utrzymania i aktualizacji po rerunie `01`.
+
+Interpretacja:
+- wykres progowy amplituda vs bloki / stan sync.
+
+Caveat:
+- koniec strumienia daje staly ogon `uncorrectable`.
+
+Wniosek:
+- sekcja aktywna; liczby referencyjne sa jeszcze utrzymywane nizej w sekcji wynikowej `01/02`.
+
+Kiedy powtarzac:
+- po zmianach w DSP, sync, correction, quality gate, sample-rate handling.
+
+### 02. Margines szumu ADC (`adc_noise_margin`)
+
+Cel testu:
+- okreslic bezpieczny obszar amplituda/szum wokol progu decode.
+
+Bodziec / osie:
+- heatmapa `amplitude_lsb x noise_lsb`.
+
+Artefakty:
+- [rds_02_adc_noise_margin.csv](../tools/validation_csv/rds_02_adc_noise_margin.csv)
+- [rds_02_adc_noise_margin.png](../image/rds_02_adc_noise_margin.png)
+
+Kryterium PASS:
+- poprawny `PS` przy stabilnym `SYNC`.
+
+Biezacy wynik:
+- do utrzymania i aktualizacji po rerunie `02`.
+
+Interpretacja:
+- mapa safe region i strefy granicznej.
+
+Caveat:
+- okolica progu nie musi byc idealnie monotoniczna przy skonczonej probce.
+
+Wniosek:
+- sekcja aktywna; liczby referencyjne sa jeszcze utrzymywane nizej w sekcji wynikowej `01/02`.
+
+Kiedy powtarzac:
+- po zmianach w SNR gating, correction, timing, generatorze noise.
+
+### 03. Faza startu i prefix (`phase_prefix_sweep`)
+
+Cel testu:
+- zmierzyc wrazliwosc na wyrownanie startu i faze poczatku strumienia.
+
+Bodziec / osie:
+- sweep `prefix_samples` lub bucket fazy startowej, baseline poza tym.
+
+Artefakty:
+- [rds_03_phase_prefix_sweep.csv](../tools/validation_csv/rds_03_phase_prefix_sweep.csv)
+- [rds_03_phase_prefix_sweep.png](../image/rds_03_phase_prefix_sweep.png)
+
+Kryterium PASS:
+- brak regresji `time_to_sync` i poprawny `PS`.
+
+Biezacy wynik:
+- do uzupelnienia przy pierwszym rerunie `03`.
+
+Interpretacja:
+- do uzupelnienia.
+
+Caveat:
+- zalezy od definicji milestone i chunked decode.
+
+Wniosek:
+- placeholder metodologiczny gotowy.
+
+Kiedy powtarzac:
+- po zmianach w timing recovery lub granicach symboli.
+
+### 04. Mismatch sample rate (`sample_rate_mismatch_heatmap`)
+
+Cel testu:
+- zmierzyc tolerancje na roznice miedzy sample rate generacji i decode.
+
+Bodziec / osie:
+- heatmapa `generate_sample_rate_hz x decode_sample_rate_hz`.
+
+Artefakty:
+- [rds_04_sample_rate_mismatch_heatmap.csv](../tools/validation_csv/rds_04_sample_rate_mismatch_heatmap.csv)
+- [rds_04_sample_rate_mismatch_heatmap.png](../image/rds_04_sample_rate_mismatch_heatmap.png)
+
+Kryterium PASS:
+- brak utraty poprawnego `PI/PS` w oczekiwanym oknie tolerancji.
+
+Biezacy wynik:
+- do uzupelnienia przy pierwszym rerunie `04`.
+
+Interpretacja:
+- do uzupelnienia.
+
+Caveat:
+- wymaga oddzielnego rate generacji i decode w runnerze.
+
+Wniosek:
+- placeholder metodologiczny gotowy.
+
+Kiedy powtarzac:
+- po zmianach w `samples_per_symbol`, NCO i sample-rate handling.
+
+### 05. Offset nosnej i pilota (`carrier_pilot_offset_sweep`)
+
+Cel testu:
+- zmierzyc margines bledu dla `57 kHz` i `19 kHz` po stronie generatora.
+
+Bodziec / osie:
+- sweep `carrier_hz` i/lub `pilot_hz`, baseline poza tym.
+
+Artefakty:
+- [rds_05_carrier_pilot_offset_sweep.csv](../tools/validation_csv/rds_05_carrier_pilot_offset_sweep.csv)
+- [rds_05_carrier_pilot_offset_sweep.png](../image/rds_05_carrier_pilot_offset_sweep.png)
+
+Kryterium PASS:
+- brak nadmiernego spadku `lock_quality` i utrzymany poprawny decode.
+
+Biezacy wynik:
+- do uzupelnienia przy pierwszym rerunie `05`.
+
+Interpretacja:
+- do uzupelnienia.
+
+Caveat:
+- trzeba rozroznic offset pilota od offsetu samej nosnej RDS.
+
+Wniosek:
+- placeholder metodologiczny gotowy.
+
+Kiedy powtarzac:
+- po zmianach w pilot detect, NCO i quality gate.
+
+### 06. Stosunek pilot do RDS (`pilot_to_rds_ratio_sweep`)
+
+Cel testu:
+- zmierzyc margines wokol aktualnego quality gate pilot/RDS.
+
+Bodziec / osie:
+- sweep `pilot_amplitude` przy stalym `amplitude_lsb`.
+
+Artefakty:
+- [rds_06_pilot_to_rds_ratio_sweep.csv](../tools/validation_csv/rds_06_pilot_to_rds_ratio_sweep.csv)
+- [rds_06_pilot_to_rds_ratio_sweep.png](../image/rds_06_pilot_to_rds_ratio_sweep.png)
+
+Kryterium PASS:
+- stabilny `quality_gate` w oczekiwanym oknie i brak falszywych dropow.
+
+Biezacy wynik:
+- do uzupelnienia przy pierwszym rerunie `06`.
+
+Interpretacja:
+- do uzupelnienia.
+
+Caveat:
+- test dotyka jednoczesnie metryk DSP i polityki gatingu.
+
+Wniosek:
+- placeholder metodologiczny gotowy.
+
+Kiedy powtarzac:
+- po zmianach w `pilot_level`, `rds_band_level` i quality gate.
+
+### 07. Blad midpoint / DC (`midpoint_offset_sweep`)
+
+Cel testu:
+- zmierzyc odpornosc na blad midpoint i sztuczny DC offset.
+
+Bodziec / osie:
+- sweep midpointu generacji i/lub midpointu dekodera.
+
+Artefakty:
+- [rds_07_midpoint_offset_sweep.csv](../tools/validation_csv/rds_07_midpoint_offset_sweep.csv)
+- [rds_07_midpoint_offset_sweep.png](../image/rds_07_midpoint_offset_sweep.png)
+
+Kryterium PASS:
+- brak istotnej utraty decode w oczekiwanym zakresie bledu midpoint.
+
+Biezacy wynik:
+- rerun wykonany na siatce `27 x 27`.
+   - `729/729` przypadkow ma `success_expected_case = 1`.
+   - zakres sweepu: `generate_midpoint_offset_lsb = -320..320`, `decode_midpoint_offset_lsb = -320..320`.
+
+Interpretacja:
+- w testowanym zakresie nie ma cliffa decode od midpoint/DC.
+   - parser utrzymuje sync i poprawny `PS` w calej siatce.
+   - ten sweep nie wskazuje na problem w `midpoint handling`; przyszle czerwienie trzeba laczyc raczej z clippingiem albo fault injection.
+
+Caveat:
+- trzeba rozroznic blad midpoint od clipowania i od noise.
+
+Wniosek:
+- aktualny baseline ma duzy margines na blad midpoint i sztuczny DC offset.
+
+Kiedy powtarzac:
+- po zmianach w DC removal i midpoint handling.
+
+### 08. Clipping i saturacja (`clipping_saturation_sweep`)
+
+Cel testu:
+- sprawdzic, gdzie zaczyna sie regresja decode od kontrolowanego clipowania.
+
+Bodziec / osie:
+- sweep `clip_ceiling` lub poziomu przesterowania.
+
+Artefakty:
+- [rds_08_clipping_saturation_sweep.csv](../tools/validation_csv/rds_08_clipping_saturation_sweep.csv)
+- [rds_08_clipping_saturation_sweep.png](../image/rds_08_clipping_saturation_sweep.png)
+
+Kryterium PASS:
+- wyraznie zidentyfikowany onset degradacji i brak ukrytego klifu w safe region.
+
+Biezacy wynik:
+- rerun wykonany na siatce `19 x 24`.
+   - `432/456` przypadkow ma `success_expected_case = 1`.
+   - wszystkie czerwone pola sa skupione wylacznie przy `amplitude_lsb = 40`.
+   - `success_sync_ps = 456/456`, wiec sync i `PS` sa zachowane nawet w czerwonym pasie.
+
+Interpretacja:
+- cliff nie wynika z pojedynczego `clip_headroom`, tylko z samego najnizszego poziomu amplitudy.
+   - od `amplitude_lsb >= 48` cala badana siatka jest zielona.
+   - przy `amplitude_lsb = 40` clipping degraduje kompletnosc licznikow grup, ale nie zrywa samego locku.
+
+Caveat:
+- clip model w generatorze jest uproszczeniem toru analogowego.
+
+Wniosek:
+- praktyczny safe region zaczyna sie od `amplitude_lsb = 48`; `40` jest obecnym progiem degradacji.
+
+Kiedy powtarzac:
+- po zmianach w generatorze amplitudy i przy korektach front-end target.
+
+### 09. Mapa burst errors (`burst_error_map`)
+
+Cel testu:
+- zmierzyc praktyczna granice correction i slip-repair dla burst errors.
+
+Bodziec / osie:
+- heatmapa `burst_start_bit x burst_len_bits`.
+
+Artefakty:
+- [rds_09_burst_error_map.csv](../tools/validation_csv/rds_09_burst_error_map.csv)
+- [rds_09_burst_error_map.png](../image/rds_09_burst_error_map.png)
+
+Kryterium PASS:
+- zgodnosc z oczekiwanym limitem correction i czytelny profil fail/pass.
+
+Biezacy wynik:
+- rerun wykonany dla `26` offsetow startu i `10` dlugosci burstu.
+   - `71/260` przypadkow ma `success_expected_case = 1`.
+   - burst `1..2` bity przechodzi dla wszystkich offsetow `0..25`.
+   - burst `3+` bity przechodzi tylko w waskich oknach startu, glownie przy koncu bloku.
+
+Interpretacja:
+- wynik jest zgodny z aktualna polityka correction `1..2` bity.
+   - zielone pola dla `3+` nie podwazaja tej polityki; sa to alignment-specific edge case'y, nie stabilny zapas.
+   - mapa dobrze rozdziela "pewna korekcja" od "sporadyczne przetrwanie".
+
+Caveat:
+- test jest sztuczny i nie modeluje wszystkich realnych wzorcow bledu.
+
+Wniosek:
+- rodzina `09` potwierdza, ze obecny limit burst correction powinien pozostac traktowany jako `1..2`, a nie jako gwarancja dla dluzszych burstow.
+
+Kiedy powtarzac:
+- po zmianach w correction policy, sync i bit-slip repair.
+
+### 10. Zaklocenia impulsowe i dropout (`impulsive_noise_dropout`)
+
+Cel testu:
+- sprawdzic odpornosc na krotkie destrukcyjne zdarzenia zamiast szumu stacjonarnego.
+
+Bodziec / osie:
+- sweep parametrow impulsu i/lub dropoutu.
+
+Artefakty:
+- [rds_10_impulsive_noise_dropout.csv](../tools/validation_csv/rds_10_impulsive_noise_dropout.csv)
+- [rds_10_impulsive_noise_dropout.png](../image/rds_10_impulsive_noise_dropout.png)
+
+Kryterium PASS:
+- kontrolowany wzrost `sync_losses` i zachowany profil recovery.
+
+Biezacy wynik:
+- rerun wykonany dla `71` scenariuszy impulsu/dropoutu.
+   - `33/71` przypadkow ma `success_expected_case = 1`.
+   - impulsy: szerokosci `1/2/4` sa stabilne; `8` zaczyna padac od `amplitude 512`, a `16/32` od `amplitude 256`.
+   - dropouty: najbardziej destrukcyjne sa geste okna `period 16..64`; rzadkie i waskie dropouty pozostaja zielone.
+
+Interpretacja:
+- ten sweep pokazuje prawdziwy frontier recovery, a nie losowy rozrzut.
+   - krotsze impulsy system przezywa, ale dluzszy impuls szybko niszczy kompletne grupy.
+   - przy dropoutach dominuje gestosc zdarzen; im mniejszy `period`, tym szybciej ginie kompletne skladanie.
+
+Caveat:
+- definicja impulsy/dropout musi pozostac stala miedzy rerunami.
+
+Wniosek:
+- rodzina `10` daje uzyteczna mape awarii dla fault injectorow i jest dobra do porownan po zmianach w recovery.
+
+Kiedy powtarzac:
+- po zmianach w fault injectors i recovery semantics.
+
+### 11. Odpornosc strumienia mieszanego (`mixed_group_robustness`)
+
+Cel testu:
+- sprawdzic zachowanie parsera przy mieszanych grupach `0A/2A/2B/other`.
+
+Bodziec / osie:
+- sweep harmonogramu i gestosci mieszanych grup.
+
+Artefakty:
+- [rds_11_mixed_group_robustness.csv](../tools/validation_csv/rds_11_mixed_group_robustness.csv)
+- [rds_11_mixed_group_robustness.png](../image/rds_11_mixed_group_robustness.png)
+
+Kryterium PASS:
+- poprawne liczniki grup i brak regresji `PS/RT`.
+
+Biezacy wynik:
+- rerun wykonany po korekcie harnessu dla rodzin semantycznych.
+   - `6/7` przypadkow ma `success_expected_case = 1`.
+   - `7/7` przypadkow ma `success_sync_ps = 1`.
+   - czerwony pozostaje tylko przypadek `ps_sparse_2a`.
+      - `PS` pozostaje poprawny.
+      - `RT 2A` nie osiagnal `rt_ready`; maska zatrzymuje sie na `0xFFDF`.
+
+Interpretacja:
+- mieszane strumienie `0A/2A/2B/other` sa stabilne po stronie `PS` i `RT`.
+   - baseline, `2B`, mix z `10A/15B` oraz scenariusz `A/B` nie pokazaly regresji podstawowego dekodu.
+   - w tej rodzinie nie warto gate'owac PASS przez sztywne absolutne liczniki grup.
+      - poczatkowa akwizycja zjada pierwsze grupy i daje stale niedoliczenie mimo poprawnej semantyki.
+   - otwarty punkt:
+      - rzadki harmonogram `2A` nadal nie sklada pelnego `64B RT` po locku.
+      - to trzeba jeszcze rozstrzygnac jako bug parsera albo zbyt maly bufor `2A` po `SyncAcquired`.
+
+Caveat:
+- zalezne od generatora `2A/2B/mixed` i wspolnego schema decode.
+
+Wniosek:
+- rodzina `11` potwierdza odpornosc mieszanych strumieni, ale zostawia otwarty problem dla sparse `2A`.
+
+Kiedy powtarzac:
+- po zmianach w group parsing i host generatorze mieszanego strumienia.
+
+### 12. Zbieznosc PS i RT (`ps_rt_convergence`)
+
+Cel testu:
+- zmierzyc czas i stabilnosc skladania `PS` i `RT`.
+
+Bodziec / osie:
+- os czasu/blokow oraz milestone `SyncAcquired`, `PsUpdated`, `RtUpdated`.
+
+Artefakty:
+- [rds_12_ps_rt_convergence.csv](../tools/validation_csv/rds_12_ps_rt_convergence.csv)
+- [rds_12_ps_rt_convergence.png](../image/rds_12_ps_rt_convergence.png)
+
+Kryterium PASS:
+- przewidywalny `first_sync`, `first_ps_ready`, `first_rt_ready` bez regresji.
+
+Biezacy wynik:
+- rerun wykonany po korekcie harnessu i wydluzeniu scenariuszy `2A`.
+   - `5/6` przypadkow ma `success_expected_case = 1`.
+   - `6/6` przypadkow ma `success_sync_ps = 1`.
+   - milestone'y sa stabilne.
+      - `first_sync_tick_ms ~= 89`.
+      - `first_ps_ready_tick_ms ~= 175..350`.
+      - `first_rt_ready_tick_ms` rosnie zgodnie z gestoscia strumienia: `1402 ms` dla gestego `2B`, `2805 ms` dla gestego `2A`, `4905 ms` dla sparse `2B`, `7535 ms` dla `2A + other`.
+   - czerwony pozostaje tylko przypadek `rt_2a_sparse`.
+      - `RT 2A` nie osiagnal `rt_ready`.
+      - maska zatrzymuje sie na `0x7FFF`.
+
+Interpretacja:
+- zbieznosc `PS` jest szybka i przewidywalna; opoznienia `RT` rosna tak, jak sugeruje gestosc grup typu `2`.
+   - `2B` sklada sie szybciej niz `2A`, co jest zgodne z mniejszym payloadem.
+   - domieszka innych grup przesuwa milestone `RT`, ale nie psuje samego locku.
+   - otwarty punkt:
+      - sparse `2A` powtarza ten sam wzorzec co rodzina `11`.
+      - to wyglada na systematyczna ceche toru `2A`, a nie przypadkowy miss pojedynczego rerunu.
+
+Caveat:
+- wymaga chunked decode i wiarygodnego drenowania event queue.
+
+Wniosek:
+- rodzina `12` daje wiarygodne milestone'y konwergencji i wzmacnia diagnoze, ze problem dotyczy specyficznie sparse `2A`.
+
+Kiedy powtarzac:
+- po zmianach w eventach, `PS/RT` parsing i milestone reporting.
+
+### 13. ASCII i interpunkcja (`charset_ascii_punctuation`)
+
+Cel testu:
+- sprawdzic integralnosc zwyklego korpusu ASCII i interpunkcji.
+
+Bodziec / osie:
+- corpus byte-by-byte albo case-by-case dla `PS/RT`.
+
+Artefakty:
+- [rds_13_charset_ascii_punctuation.csv](../tools/validation_csv/rds_13_charset_ascii_punctuation.csv)
+- [rds_13_charset_ascii_punctuation.png](../image/rds_13_charset_ascii_punctuation.png)
+
+Kryterium PASS:
+- zgodnosc bajtow i brak mylenia integralnosci z renderowaniem.
+
+Biezacy wynik:
+- rerun wykonany po poprawie host decode output i wydluzeniu scenariuszy `2A`.
+   - `4/4` przypadkow ma `success_expected_case = 1`.
+   - `4/4` przypadkow ma `success_sync_ps = 1`.
+
+Interpretacja:
+- zwykle ASCII i interpunkcja przechodza end-to-end bez rozjazdu miedzy stringiem i `hex`.
+   - escape w host decode output przestal psuc analize przypadkow z interpunkcja.
+   - rodzina nadaje sie do wykrywania realnych regresji parsera, a nie bledow raportowania.
+
+Caveat:
+- klasyczny RDS nie jest `UTF-8`; trzeba patrzec na bajty i hex.
+
+Wniosek:
+- temat ASCII/interpunkcji jest aktualnie domkniety po stronie harnessu i host decode output.
+
+Kiedy powtarzac:
+- po zmianach w generatorze tekstu i host decode output.
+
+### 14. Bajty rozszerzone (`charset_extended_bytes`)
+
+Cel testu:
+- rozdzielic integralnosc bajtow rozszerzonych od polityki renderowania tekstu.
+
+Bodziec / osie:
+- sweep bajtow rozszerzonych istotnych dla charsetu RDS.
+
+Artefakty:
+- [rds_14_charset_extended_bytes.csv](../tools/validation_csv/rds_14_charset_extended_bytes.csv)
+- [rds_14_charset_extended_bytes.png](../image/rds_14_charset_extended_bytes.png)
+
+Kryterium PASS:
+- zgodnosc `transmitted byte -> decoded byte`, niezaleznie od tego jak jest renderowany znak.
+
+Biezacy wynik:
+- rerun wykonany dla `5` case'ow rozszerzonych bajtow.
+   - `5/5` przypadkow ma `success_expected_case = 1`.
+   - `5/5` przypadkow ma `success_sync_ps = 1`.
+
+Interpretacja:
+- integralnosc rozszerzonych bajtow jest zachowana, jesli czytac wynik przez `rt_hex`.
+   - polityka renderowania nie zaciemnia juz tego testu.
+   - ta rodzina dobrze rozdziela "decoded byte" od "widoczny znak".
+
+Caveat:
+- wynik trzeba czytac przez `hex`, nie tylko przez widoczny string.
+
+Wniosek:
+- rodzina `14` potwierdza poprawny transport bajtow rozszerzonych w aktualnym harnessie.
+
+Kiedy powtarzac:
+- po zmianach w families znakowych i hostowym raportowaniu bajtow.
+
+### 15. End marker i A/B dla RT (`rt_endmarker_ab_reset`)
+
+Cel testu:
+- sprawdzic semantyke `0x0D`, flagi `A/B` i resetu cyklu zycia `RT`.
+
+Bodziec / osie:
+- scenariusze z end markerem, partial RT i kontrolowanym flipem `A/B`.
+
+Artefakty:
+- [rds_15_rt_endmarker_ab_reset.csv](../tools/validation_csv/rds_15_rt_endmarker_ab_reset.csv)
+- [rds_15_rt_endmarker_ab_reset.png](../image/rds_15_rt_endmarker_ab_reset.png)
+
+Kryterium PASS:
+- poprawny reset `RT`, poprawny milestone i brak mieszania starego tekstu z nowym.
+
+Biezacy wynik:
+- rerun wykonany dla `4` scenariuszy cyklu zycia `RT`.
+   - `3/4` przypadkow ma `success_expected_case = 1`.
+   - `4/4` przypadkow ma `success_sync_ps = 1`.
+   - oba scenariusze `A/B full` sa zielone.
+      - `2A AB full` przechodzi.
+      - `2B AB full` przechodzi.
+   - `2B partial` przechodzi zgodnie z oczekiwaniem braku gotowego nowego `RT`.
+   - czerwony pozostaje tylko `endmarker_primary_2a`.
+      - zwracany tekst to `LIVE\x0DSTALE TAIL`.
+      - oczekiwana semantyka to obciecie do `LIVE`.
+
+Interpretacja:
+- flip `A/B` i reset cyklu zycia `RT` dzialaja poprawnie w pelnych scenariuszach.
+   - problem nie lezy w samym `A/B`.
+   - otwarty punkt:
+      - aktualny `RDSCore` nie honoruje `0x0D` jako end marker `RT`.
+      - to jest realny brak semantyki parsera, nie falszywe czerwone od harnessu.
+
+Caveat:
+- wymaga jednoczesnie generatora `2A/2B`, `A/B` flip i milestone output po stronie decode.
+
+Wniosek:
+- rodzina `15` zawezila problem do obslugi `0x0D`; logika `A/B` jest potwierdzona.
+
+Kiedy powtarzac:
+- po zmianach w `RT` parsing, `A/B`, end-marker handling i eventach tekstowych.
+
+---
+
+## Testy syntetyczne czulosci ADC (legacy wyniki rodzin 01 i 02)
+
+Ta sekcja pozostaje tymczasowo jako material wynikowy dla rodzin `01` i `02`.
+Po kolejnej aktualizacji wynikow jej liczby zostana utrzymywane juz bezposrednio
+w odpowiadajacych im podsekcjach metodologii powyzej.
 
 ### Uzyte narzedzia
 
@@ -995,10 +1598,10 @@ Pliki i binarki:
 - `tools/bin/rds_core_selftest`
 
 Wspierajace pliki wynikowe:
-- [rds_adc_sensitivity_sweep.csv](../tools/rds_adc_sensitivity_sweep.csv)
-- [rds_adc_noise_margin.csv](../tools/rds_adc_noise_margin.csv)
-- [rds_adc_sensitivity_sweep.png](../image/rds_adc_sensitivity_sweep.png)
-- [rds_adc_noise_margin.png](../image/rds_adc_noise_margin.png)
+- [rds_01_adc_sensitivity_sweep.csv](../tools/validation_csv/rds_01_adc_sensitivity_sweep.csv)
+- [rds_02_adc_noise_margin.csv](../tools/validation_csv/rds_02_adc_noise_margin.csv)
+- [rds_01_adc_sensitivity_sweep.png](../image/rds_01_adc_sensitivity_sweep.png)
+- [rds_02_adc_noise_margin.png](../image/rds_02_adc_noise_margin.png)
 
 ### Metoda testu
 
@@ -1023,7 +1626,7 @@ Decoder hostowy:
 
 ### Wyniki najwazniejsze
 
-Z [rds_adc_sensitivity_sweep.csv](../tools/rds_adc_sensitivity_sweep.csv):
+Z [rds_01_adc_sensitivity_sweep.csv](../tools/validation_csv/rds_01_adc_sensitivity_sweep.csv):
 - pierwszy pelny sukces (`sync_state=SYNC` i `PS == TESTFM`) pojawia sie przy:
   - `40 LSB peak`
   - `32.234432 mV peak`
@@ -1031,14 +1634,14 @@ Z [rds_adc_sensitivity_sweep.csv](../tools/rds_adc_sensitivity_sweep.csv):
   - `39 LSB peak`
   - `31.428571 mV peak`
 
-![RDS ADC sensitivity sweep](../image/rds_adc_sensitivity_sweep.png)
+![RDS ADC sensitivity sweep](../image/rds_01_adc_sensitivity_sweep.png)
 
-Z [rds_adc_noise_margin.csv](../tools/rds_adc_noise_margin.csv):
+Z [rds_02_adc_noise_margin.csv](../tools/validation_csv/rds_02_adc_noise_margin.csv):
 - `40 LSB` jest progiem granicznym: czesc poziomow szumu przechodzi, czesc nie,
 - `42 LSB` przechodzi dla calej testowanej macierzy `noise_lsb = 0..16`,
 - `46 LSB` ma juz wyrazny zapas i przechodzi wszystkie testowane punkty.
 
-![RDS ADC noise margin](../image/rds_adc_noise_margin.png)
+![RDS ADC noise margin](../image/rds_02_adc_noise_margin.png)
 
 ### Bardzo wazna obserwacja praktyczna
 
@@ -1046,12 +1649,22 @@ Prog stabilny z testu syntetycznego:
 - `42 LSB peak`
 - `33.846154 mV peak`
 
-To jest bardzo blisko analitycznego przewidywania dla toru `MCP6001`:
-- oczekiwane okolo `41 LSB`
+To daje bardzo wazny wniosek projektowy:
+- stare zalozenie `~41 LSB` dla toru `MCP6001` jest juz za blisko granicy poprawnego dzialania,
+- skoro `42 LSB` jest stabilnym progiem, a `46 LSB` daje wyrazny zapas,
+  to nominal dla PCB v1.1 powinien trafic blizej `45..46 LSB`.
+
+Rekomendowany update gain dla PCB v1.1:
+- zostawic `Rg = 2 kOhm`,
+- z dostepnych wartosci PCBA wybrac `Rf = 12 kOhm`,
+- co daje `Av = 7.0x`,
+- i przewidywany poziom na ADC okolo `47 LSB peak`.
 
 Czyli:
-- syntetyka i teoria z front-endu zgadzaja sie ze soba zaskakujaco dobrze,
-- to jest mocny argument, ze PCB v1.1 ma realna szanse odblokowac poprawny odbior RDS.
+- syntetyka pokazala, ze front-end trzeba delikatnie podbic wzgledem starego celu,
+- ale nie ma potrzeby isc w agresywne `7.7x`,
+- z ograniczonej biblioteki PCBA najlepszy wybor to `12k / 2k`,
+  bo `12k / 2.2k` wychodzi juz zbyt nisko, a `10k / 1.5k` zbyt wysoko.
 
 ### Uwaga o interpretacji CSV
 
@@ -1085,14 +1698,14 @@ Wniosek roboczy:
 ### Rzeczy poprawione wzgledem starego planu
 
 - `sample_rate` realny to `227758`, nie idealne `228000`
-- realny hardware uzywa `generic NCO path`, nie `fast path 228k`
+- ~~realny hardware uzywa `generic NCO path`, nie `fast path 228k`~~ → **naprawione**: fast-path kod **usuniety**, jedyna sciezka to `NCO`
 - correction table jest `1..2`, nie `1..5`
-- `SEARCH` akceptuje tylko exact match, bez correction
-- quality gate dla `rds_band` ma prog `1024 Q8`, nie `5120 Q8`
-- `2B` ma `16` segmentow po `2` znaki, nie `8`
+- wejscie z `SEARCH` do `PRE_SYNC` akceptuje tylko `Valid` / exact match; `Corrected` w `SEARCH` pozostaja diagnostyczne
+- ~~quality gate dla `rds_band` ma prog `1024 Q8`, nie `5120 Q8`~~ → **naprawione**: teraz `5120 Q8` = `20.0`
+- ~~`2B` ma `16` segmentow po `2` znaki, nie `8`~~ → **naprawione**: teraz `8` segmentow po `2` znaki
 - event queue dropuje **najstarszy** event, nie newest
-- `BlockStatsUpdated` jest zdefiniowany, ale nie jest emitowany
-- `tick_ms` w eventach istnieje, ale nie jest wypelniany
+- ~~`BlockStatsUpdated` jest zdefiniowany, ale nie jest emitowany~~ → **naprawione**: emitowany co `32` bloki
+- ~~`tick_ms` w eventach istnieje, ale nie jest wypelniany~~ → **naprawione**: wypelniany przez `rds_core_set_tick_ms()`
 - `slip_retry_pending` istnieje, ale obecnie nie uczestniczy w realnym retry
 - aktualne pliki runtime to `rds_runtime_meta.txt` / `rds_capture_u16le.raw` / `rds_capture_meta.txt`,
   a nie `session_meta` / `mpx_adc_u16le`
@@ -1128,6 +1741,8 @@ Na PCB v1.1 powinno zostac zachowane:
 - polaczenie `MPXO` z `TEA5767 pin 25` do front-endu `MCP6001`
 - wyjscie `MCP6001` do `PA4`
 - zasilanie `MCP6001` z `3.3V_TEA`
+- nominalny gain front-endu ustawiony na okolo `7.0x`
+   (`Rf = 12 kOhm`, `Rg = 2 kOhm`)
 - bardzo krotka trasa analogowa do `PA4`
 - brak prowadzenia tej linii obok wyjsc glosnikowych i sekcji PAM
 

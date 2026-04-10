@@ -5,8 +5,6 @@
 #define RDS_BITRATE_Q16 0x04A38000UL /* 1187.5 * 65536 */
 #define RDS_CARRIER_HZ 57000U
 #define RDS_PILOT_HZ 19000U
-#define RDS_FAST_PATH_228K_HZ 228000U
-#define RDS_FAST_PATH_DECIM_FACTOR 2U
 
 static const int16_t rds_carrier_cos_q8[16] = {
     256, 237, 181, 98, 0, -98, -181, -237,
@@ -66,9 +64,6 @@ void rds_dsp_init(RDSDsp* dsp, uint32_t sample_rate_hz) {
     if(!dsp) return;
 
     dsp->sample_rate_hz = sample_rate_hz;
-    dsp->use_fast_path_228k = (sample_rate_hz == RDS_FAST_PATH_228K_HZ);
-    dsp->sample_mod4 = 0U;
-    dsp->sample_mod12 = 0U;
     dsp->decim_factor = 1U;
     dsp->decim_phase = 0U;
     dsp->decim_step_q16 = (uint32_t)dsp->decim_factor << 16U;
@@ -136,8 +131,6 @@ void rds_dsp_reset(RDSDsp* dsp) {
     dsp->symbol_phase_q16 = 0U;
     dsp->timing_adjust_q16 = 0;
     dsp->timing_error_avg_q8 = 0;
-    dsp->sample_mod4 = 0U;
-    dsp->sample_mod12 = 0U;
     dsp->decim_phase = 0U;
     dsp->carrier_phase_q32 = 0U;
     dsp->pilot_phase_q32 = 0U;
@@ -197,53 +190,16 @@ void rds_dsp_process_u16_samples(
         int32_t hp = centered_q8 - dsp->dc_estimate_q8;
         dsp->avg_abs_hp_q8 = rds_ema_u32(dsp->avg_abs_hp_q8, rds_abs_i32(hp), 8U);
 
-        uint8_t pilot_index;
-        if(dsp->use_fast_path_228k) {
-            pilot_index = dsp->sample_mod12;
-            dsp->sample_mod12++;
-            if(dsp->sample_mod12 >= 12U) {
-                dsp->sample_mod12 = 0U;
-            }
-        } else {
-            pilot_index = (uint8_t)((dsp->pilot_phase_q32 >> 28U) % 12U);
-            dsp->pilot_phase_q32 += dsp->pilot_step_q32;
-        }
+        uint8_t pilot_index = (uint8_t)((dsp->pilot_phase_q32 >> 28U) % 12U);
+        dsp->pilot_phase_q32 += dsp->pilot_step_q32;
         uint32_t pilot_mag_sample =
             (rds_abs_i32(hp) * rds_pilot_abs_sum_q8[pilot_index]) >> 8U;
         dsp->pilot_level_q8 = rds_ema_u32(dsp->pilot_level_q8, pilot_mag_sample, 8U);
 
-        int32_t mixed_i;
-        int32_t mixed_q;
-        if(dsp->use_fast_path_228k) {
-            switch(dsp->sample_mod4) {
-            case 0U:
-                mixed_i = hp;
-                mixed_q = 0;
-                break;
-            case 1U:
-                mixed_i = 0;
-                mixed_q = -hp;
-                break;
-            case 2U:
-                mixed_i = -hp;
-                mixed_q = 0;
-                break;
-            default:
-                mixed_i = 0;
-                mixed_q = hp;
-                break;
-            }
-
-            dsp->sample_mod4++;
-            if(dsp->sample_mod4 >= 4U) {
-                dsp->sample_mod4 = 0U;
-            }
-        } else {
-            uint8_t carrier_index = (uint8_t)(dsp->carrier_phase_q32 >> 28U);
-            mixed_i = (hp * rds_carrier_cos_q8[carrier_index]) >> 8;
-            mixed_q = (-hp * rds_carrier_sin_q8[carrier_index]) >> 8;
-            dsp->carrier_phase_q32 += dsp->carrier_step_q32;
-        }
+        uint8_t carrier_index = (uint8_t)(dsp->carrier_phase_q32 >> 28U);
+        int32_t mixed_i = (hp * rds_carrier_cos_q8[carrier_index]) >> 8;
+        int32_t mixed_q = (-hp * rds_carrier_sin_q8[carrier_index]) >> 8;
+        dsp->carrier_phase_q32 += dsp->carrier_step_q32;
 
         // Three-stage cascade IIR LPF (alpha=1/8 each).
         // Effective -3dB at ~2.5 kHz @ 228kHz, 18 dB/octave rolloff.
