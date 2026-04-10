@@ -1075,7 +1075,8 @@ Bodziec / osie:
 
 Artefakty:
 - [rds_01_adc_sensitivity_sweep.csv](../tools/validation_csv/rds_01_adc_sensitivity_sweep.csv)
-- [rds_01_adc_sensitivity_sweep.png](../image/rds_01_adc_sensitivity_sweep.png)
+- podglad PNG:
+   ![rds_01_adc_sensitivity_sweep](../image/rds_01_adc_sensitivity_sweep.png)
 
 Kryterium PASS:
 - `sync_state = SYNC` i poprawny `PS`.
@@ -1105,7 +1106,8 @@ Bodziec / osie:
 
 Artefakty:
 - [rds_02_adc_noise_margin.csv](../tools/validation_csv/rds_02_adc_noise_margin.csv)
-- [rds_02_adc_noise_margin.png](../image/rds_02_adc_noise_margin.png)
+- podglad PNG:
+   ![rds_02_adc_noise_margin](../image/rds_02_adc_noise_margin.png)
 
 Kryterium PASS:
 - poprawny `PS` przy stabilnym `SYNC`.
@@ -1135,7 +1137,8 @@ Bodziec / osie:
 
 Artefakty:
 - [rds_03_phase_prefix_sweep.csv](../tools/validation_csv/rds_03_phase_prefix_sweep.csv)
-- [rds_03_phase_prefix_sweep.png](../image/rds_03_phase_prefix_sweep.png)
+- podglad PNG:
+   ![rds_03_phase_prefix_sweep](../image/rds_03_phase_prefix_sweep.png)
 
 Kryterium PASS:
 - brak regresji `time_to_sync` i poprawny `PS`.
@@ -1165,7 +1168,8 @@ Bodziec / osie:
 
 Artefakty:
 - [rds_04_sample_rate_mismatch_heatmap.csv](../tools/validation_csv/rds_04_sample_rate_mismatch_heatmap.csv)
-- [rds_04_sample_rate_mismatch_heatmap.png](../image/rds_04_sample_rate_mismatch_heatmap.png)
+- podglad PNG:
+   ![rds_04_sample_rate_mismatch_heatmap](../image/rds_04_sample_rate_mismatch_heatmap.png)
 
 Kryterium PASS:
 - brak utraty poprawnego `PI/PS` w oczekiwanym oknie tolerancji.
@@ -1195,7 +1199,8 @@ Bodziec / osie:
 
 Artefakty:
 - [rds_05_carrier_pilot_offset_sweep.csv](../tools/validation_csv/rds_05_carrier_pilot_offset_sweep.csv)
-- [rds_05_carrier_pilot_offset_sweep.png](../image/rds_05_carrier_pilot_offset_sweep.png)
+- podglad PNG:
+   ![rds_05_carrier_pilot_offset_sweep](../image/rds_05_carrier_pilot_offset_sweep.png)
 
 Kryterium PASS:
 - brak nadmiernego spadku `lock_quality` i utrzymany poprawny decode.
@@ -1225,7 +1230,8 @@ Bodziec / osie:
 
 Artefakty:
 - [rds_06_pilot_to_rds_ratio_sweep.csv](../tools/validation_csv/rds_06_pilot_to_rds_ratio_sweep.csv)
-- [rds_06_pilot_to_rds_ratio_sweep.png](../image/rds_06_pilot_to_rds_ratio_sweep.png)
+- podglad PNG:
+   ![rds_06_pilot_to_rds_ratio_sweep](../image/rds_06_pilot_to_rds_ratio_sweep.png)
 
 Kryterium PASS:
 - stabilny `quality_gate` w oczekiwanym oknie i brak falszywych dropow.
@@ -1255,7 +1261,8 @@ Bodziec / osie:
 
 Artefakty:
 - [rds_07_midpoint_offset_sweep.csv](../tools/validation_csv/rds_07_midpoint_offset_sweep.csv)
-- [rds_07_midpoint_offset_sweep.png](../image/rds_07_midpoint_offset_sweep.png)
+- podglad PNG:
+   ![rds_07_midpoint_offset_sweep](../image/rds_07_midpoint_offset_sweep.png)
 
 Kryterium PASS:
 - brak istotnej utraty decode w oczekiwanym zakresie bledu midpoint.
@@ -1289,7 +1296,8 @@ Bodziec / osie:
 
 Artefakty:
 - [rds_08_clipping_saturation_sweep.csv](../tools/validation_csv/rds_08_clipping_saturation_sweep.csv)
-- [rds_08_clipping_saturation_sweep.png](../image/rds_08_clipping_saturation_sweep.png)
+- podglad PNG:
+   ![rds_08_clipping_saturation_sweep](../image/rds_08_clipping_saturation_sweep.png)
 
 Kryterium PASS:
 - wyraznie zidentyfikowany onset degradacji i brak ukrytego klifu w safe region.
@@ -1324,7 +1332,8 @@ Bodziec / osie:
 
 Artefakty:
 - [rds_09_burst_error_map.csv](../tools/validation_csv/rds_09_burst_error_map.csv)
-- [rds_09_burst_error_map.png](../image/rds_09_burst_error_map.png)
+- podglad PNG:
+   ![rds_09_burst_error_map](../image/rds_09_burst_error_map.png)
 
 Kryterium PASS:
 - zgodnosc z oczekiwanym limitem correction i czytelny profil fail/pass.
@@ -1359,7 +1368,8 @@ Bodziec / osie:
 
 Artefakty:
 - [rds_10_impulsive_noise_dropout.csv](../tools/validation_csv/rds_10_impulsive_noise_dropout.csv)
-- [rds_10_impulsive_noise_dropout.png](../image/rds_10_impulsive_noise_dropout.png)
+- podglad PNG:
+   ![rds_10_impulsive_noise_dropout](../image/rds_10_impulsive_noise_dropout.png)
 
 Kryterium PASS:
 - kontrolowany wzrost `sync_losses` i zachowany profil recovery.
@@ -1394,7 +1404,8 @@ Bodziec / osie:
 
 Artefakty:
 - [rds_11_mixed_group_robustness.csv](../tools/validation_csv/rds_11_mixed_group_robustness.csv)
-- [rds_11_mixed_group_robustness.png](../image/rds_11_mixed_group_robustness.png)
+- podglad PNG:
+   ![rds_11_mixed_group_robustness](../image/rds_11_mixed_group_robustness.png)
 
 Kryterium PASS:
 - poprawne liczniki grup i brak regresji `PS/RT`.
@@ -1435,7 +1446,8 @@ Bodziec / osie:
 
 Artefakty:
 - [rds_12_ps_rt_convergence.csv](../tools/validation_csv/rds_12_ps_rt_convergence.csv)
-- [rds_12_ps_rt_convergence.png](../image/rds_12_ps_rt_convergence.png)
+- podglad PNG:
+   ![rds_12_ps_rt_convergence](../image/rds_12_ps_rt_convergence.png)
 
 Kryterium PASS:
 - przewidywalny `first_sync`, `first_ps_ready`, `first_rt_ready` bez regresji.
@@ -1479,7 +1491,8 @@ Bodziec / osie:
 
 Artefakty:
 - [rds_13_charset_ascii_punctuation.csv](../tools/validation_csv/rds_13_charset_ascii_punctuation.csv)
-- [rds_13_charset_ascii_punctuation.png](../image/rds_13_charset_ascii_punctuation.png)
+- podglad PNG:
+   ![rds_13_charset_ascii_punctuation](../image/rds_13_charset_ascii_punctuation.png)
 
 Kryterium PASS:
 - zgodnosc bajtow i brak mylenia integralnosci z renderowaniem.
@@ -1513,7 +1526,8 @@ Bodziec / osie:
 
 Artefakty:
 - [rds_14_charset_extended_bytes.csv](../tools/validation_csv/rds_14_charset_extended_bytes.csv)
-- [rds_14_charset_extended_bytes.png](../image/rds_14_charset_extended_bytes.png)
+- podglad PNG:
+   ![rds_14_charset_extended_bytes](../image/rds_14_charset_extended_bytes.png)
 
 Kryterium PASS:
 - zgodnosc `transmitted byte -> decoded byte`, niezaleznie od tego jak jest renderowany znak.
@@ -1547,7 +1561,8 @@ Bodziec / osie:
 
 Artefakty:
 - [rds_15_rt_endmarker_ab_reset.csv](../tools/validation_csv/rds_15_rt_endmarker_ab_reset.csv)
-- [rds_15_rt_endmarker_ab_reset.png](../image/rds_15_rt_endmarker_ab_reset.png)
+- podglad PNG:
+   ![rds_15_rt_endmarker_ab_reset](../image/rds_15_rt_endmarker_ab_reset.png)
 
 Kryterium PASS:
 - poprawny reset `RT`, poprawny milestone i brak mieszania starego tekstu z nowym.
