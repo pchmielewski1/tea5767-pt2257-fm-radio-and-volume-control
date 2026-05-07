@@ -32,15 +32,19 @@
 /* FIR41 lowpass 3.8 kHz @ 15.625 kHz, Q15 unity-gain. Tap quantization headroom
  * already keeps |acc| within int16_t after >>15, so no extra output shift. */
 #define RDS_FIR41_OUTPUT_SHIFT 0U
-/* FIR41 introduces (RDS_EN50067_FIR_TAPS-1)/2 = 20 output samples = 160 input
- * samples of group delay. Symbol period at 1187.5 bps from 125 kHz input is
- * ~105.26 input samples, so the delay is ~1.52 symbols. The fractional part
- * (~0.52 symbol) must be pre-loaded into symbol_phase so that the first half-
- * symbol boundary lands on the centre of the first valid biphase symbol.
- * Sweeping confirmed 5/16 of the symbol period gives BER=0 on the synthetic
- * biphase reference and best decoded groups on rds_capture_u16le_0004.raw. */
-#define RDS_INITIAL_SYMBOL_PHASE_NUM 5U
-#define RDS_INITIAL_SYMBOL_PHASE_DEN 16U
+/* The symbol sampler runs after HB1 -> HB2 -> HB3 -> FIR41. The initial phase
+ * must therefore compensate the fractional group delay of the full cascade,
+ * not just the last FIR stage. With the current filters the total delay is
+ * 219 input samples, which is ~2.0805 symbols at 125 kHz / 1187.5 bps; only
+ * the fractional remainder (~0.0805 symbol) should be preloaded. */
+#define RDS_HB1_GROUP_DELAY_INPUT_SAMPLES (((RDS_HB1_TAPS - 1U) / 2U))
+#define RDS_HB2_GROUP_DELAY_INPUT_SAMPLES ((((RDS_HB2_TAPS - 1U) / 2U) * 2U))
+#define RDS_HB3_GROUP_DELAY_INPUT_SAMPLES ((((RDS_HB3_TAPS - 1U) / 2U) * 4U))
+#define RDS_FIR41_GROUP_DELAY_INPUT_SAMPLES \
+    ((((RDS_EN50067_FIR_TAPS - 1U) / 2U) * RDS_RUNTIME_DECIMATION_FACTOR))
+#define RDS_TOTAL_GROUP_DELAY_INPUT_SAMPLES \
+    (RDS_HB1_GROUP_DELAY_INPUT_SAMPLES + RDS_HB2_GROUP_DELAY_INPUT_SAMPLES + \
+     RDS_HB3_GROUP_DELAY_INPUT_SAMPLES + RDS_FIR41_GROUP_DELAY_INPUT_SAMPLES)
 #define RDS_PACK_I16_CONST(lo, hi) \
     ((uint32_t)(uint16_t)(int16_t)(lo) | ((uint32_t)(uint16_t)(int16_t)(hi) << 16U))
 
@@ -620,8 +624,11 @@ static inline int16_t rds_fir41_apply_q15(const int16_t* window) {
 }
 
 static inline uint32_t rds_initial_symbol_phase_q16(uint32_t period_q16) {
-    return (uint32_t)(((uint64_t)period_q16 * RDS_INITIAL_SYMBOL_PHASE_NUM) /
-                      RDS_INITIAL_SYMBOL_PHASE_DEN);
+    if(period_q16 == 0U) {
+        return 0U;
+    }
+
+    return (uint32_t)((((uint64_t)RDS_TOTAL_GROUP_DELAY_INPUT_SAMPLES) << 16U) % period_q16);
 }
 
 #ifdef HOST_BUILD
