@@ -44,10 +44,11 @@ rds_capture_*.txt
 rds_runtime_meta.txt
 
 # Local-only docs / tooling (not pushed — keep README.md & TEA5767/examples.md tracked)
-AGENTS.md
-CLAUDE.md
 agent.md
 removable_candidates.md
 unused_symbols_report.md
-.claude/
+AGENTS.md
+CLAUDE.md
+hooks/
 .cursor/
+.claude/

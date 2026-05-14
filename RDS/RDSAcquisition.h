@@ -79,7 +79,6 @@ typedef struct {
     uint16_t ring_capacity_blocks;
     uint32_t ring_overrun_count;
     uint32_t adc_overrun_count;
-    uint32_t samples_delivered;
     bool running;
 } RdsAcquisitionStats;
 

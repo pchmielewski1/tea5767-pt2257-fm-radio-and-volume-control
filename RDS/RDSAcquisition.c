@@ -390,7 +390,6 @@ void rds_acquisition_reset(RdsAcquisition* acquisition) {
     acquisition->stats.pending_peak_blocks = 0U;
     acquisition->stats.ring_overrun_count = 0U;
     acquisition->stats.adc_overrun_count = 0U;
-    acquisition->stats.samples_delivered = 0U;
 }
 
 bool rds_acquisition_start(RdsAcquisition* acquisition) {
@@ -471,8 +470,6 @@ void rds_acquisition_on_timer_tick(RdsAcquisition* acquisition, bool drain_all_p
     while(rds_acquisition_pop_pending_block_copy(acquisition, block_copy)) {
         acquisition->sample_count += RDS_ACQ_BLOCK_SAMPLES;
         acquisition->stats.delivered_blocks++;
-        acquisition->stats.samples_delivered = acquisition->sample_count;
-
         if(acquisition->block_callback) {
             acquisition->block_callback(
                 block_copy,
