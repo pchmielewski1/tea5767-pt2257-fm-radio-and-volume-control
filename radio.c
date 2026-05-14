@@ -939,6 +939,13 @@ static bool fmradio_rds_capture_trim_file_to_written_size(void) {
     const uint32_t bytes_written =
         rds_capture_written_blocks * RDS_ACQ_BLOCK_SAMPLES * RDS_CAPTURE_SAMPLE_BYTES;
 
+    /* The RAW file is preallocated to the full target size up front.
+       When capture reaches the full target, trimming is a no-op and some
+       cards/filesystem states intermittently fail the extra truncate step. */
+    if(bytes_written >= RDS_CAPTURE_TARGET_BYTES) {
+        return true;
+    }
+
     if(!storage_file_seek(rds_capture_file, bytes_written, true)) {
         return false;
     }

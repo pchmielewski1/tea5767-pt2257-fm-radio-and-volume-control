@@ -2,7 +2,7 @@ App(
     appid="fmradio_controller_pt2257",
     name="FReD FM",
     apptype=FlipperAppType.EXTERNAL,
-    sources=["*.c*", "!tools"],
+    sources=["*.c*", "!tools", "!hooks"],
     entry_point="fmradio_controller_app",
     stack_size=4 * 1024,
     fap_category="GPIO",

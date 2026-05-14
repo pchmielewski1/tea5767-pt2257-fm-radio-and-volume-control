@@ -1,5 +1,7 @@
 #include "RDSAcquisition.h"
 
+/* Real-time pipeline, 8.192 ms block cadence, ISR vs worker split: RDSAcquisition.h */
+
 #include <string.h>
 
 #include <stm32wbxx_ll_adc.h>
