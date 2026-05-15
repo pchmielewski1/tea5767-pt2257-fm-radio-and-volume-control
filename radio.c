@@ -112,6 +112,7 @@ static void fmradio_rds_adc_stop(void);
 static void fmradio_rds_adc_timer_callback(void* context);
 static bool fmradio_rds_pipeline_enabled(void);
 static void fmradio_rds_pipeline_start(void);
+static void fmradio_rds_constellation_clear_history(void);
 static void fmradio_rds_symbol_callback(
     void* context,
     int32_t symbol_i,
@@ -1702,6 +1703,7 @@ static void fmradio_rds_pipeline_start(void) {
     }
 
     fmradio_rds_clear_station_name();
+    fmradio_rds_constellation_clear_history();
 }
 
 static bool fmradio_rds_pipeline_enabled(void) {
@@ -1894,7 +1896,14 @@ static void fmradio_rds_symbol_callback(
     UNUSED(context);
     UNUSED(confidence_q16);
 
-    if(!rds_constellation_view_active) {
+    /* Always push decoded bit to RDS core whenever RDS is enabled.
+     * This runs on the DSP worker thread, not on the ISR hot path. */
+    uint8_t bit = (symbol_i > 0) ? 1 : 0;
+    rds_core_push_bit(&rds_core, bit);
+
+    /* Record constellation history only when debug view is active.
+     * Guarded by rds_debug_enabled to avoid overhead in normal operation. */
+    if(!rds_debug_enabled || !rds_constellation_view_active) {
         return;
     }
 
